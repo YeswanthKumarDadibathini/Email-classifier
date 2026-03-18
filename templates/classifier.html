@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Classifier - Neural Network</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .page-header {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        .btn-primary {
+            background-color: #a777e3;
+            border-color: #a777e3;
+        }
+        .btn-primary:hover {
+            background-color: #6e8efb;
+            border-color: #6e8efb;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            margin-bottom: 2rem;
+        }
+        .result-card {
+            display: none;
+        }
+        .category-badge {
+            font-size: 1.2rem;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            margin-bottom: 1rem;
+        }
+        .loader {
+            display: none;
+            margin: 1rem auto;
+        }
+        #confidence-chart {
+            max-height: 250px;
+        }
+    </style>
+</head>
+<body>
+    <header class="page-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="fas fa-envelope me-2"></i>Email Classifier</h1>
+                <a href="/" class="btn btn-outline-light">Home</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h2 class="h4 mb-0"><i class="fas fa-keyboard me-2"></i>Input Email Text</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="classifier-form">
+                            <div class="mb-3">
+                                <textarea id="email-text" class="form-control" rows="8" placeholder="Paste your email text here..."></textarea>
+                            </div>
+                            <div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-brain me-2"></i>Classify Email
+                                </button>
+                            </div>
+                        </form>
+                        <div class="text-center mt-3">
+                            <div class="spinner-border text-primary loader" id="loader" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="card result-card" id="result-card">
+                    <div class="card-header bg-white">
+                        <h2 class="h4 mb-0"><i class="fas fa-chart-pie me-2"></i>Classification Results</h2>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="mb-4">
+                            <h3 class="h5 mb-3">Predicted Category</h3>
+                            <span id="category-badge" class="category-badge"></span>
+                            <p class="mb-0">Confidence: <span id="confidence-value">0</span>%</p>
+                        </div>
+                        
+                        <div>
+                            <h3 class="h5 mb-3">Confidence Distribution</h3>
+                            <canvas id="confidence-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-light p-4 mt-5">
+        <div class="container text-center">
+            <p>Email Classifier - Built with TensorFlow and Flask</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('classifier-form');
+            const emailText = document.getElementById('email-text');
+            const loader = document.getElementById('loader');
+            const resultCard = document.getElementById('result-card');
+            const categoryBadge = document.getElementById('category-badge');
+            const confidenceValue = document.getElementById('confidence-value');
+            let confidenceChart = null;
+            
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                if (!emailText.value.trim()) {
+                    alert('Please enter email text');
+                    return;
+                }
+                
+                // Show loader
+                loader.style.display = 'inline-block';
+                resultCard.style.display = 'none';
+                
+                try {
+                    const response = await fetch('/classify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            email_text: emailText.value
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        displayResults(data);
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to classify email'));
+                    }
+                } catch (error) {
+                    alert('Network error: ' + error.message);
+                } finally {
+                    loader.style.display = 'none';
+                }
+            });
+            
+            function displayResults(data) {
+                // Display category and confidence
+                const category = data.category;
+                const confidence = Math.round(data.confidence * 100);
+                
+                // Set badge color based on category
+                let badgeColor;
+                switch(category) {
+                    case 'Work':
+                        badgeColor = 'bg-primary';
+                        break;
+                    case 'Personal':
+                        badgeColor = 'bg-success';
+                        break;
+                    case 'Spam':
+                        badgeColor = 'bg-warning';
+                        break;
+                    default:
+                        badgeColor = 'bg-secondary';
+                }
+                
+                categoryBadge.className = `category-badge ${badgeColor}`;
+                categoryBadge.textContent = category;
+                confidenceValue.textContent = confidence;
+                
+                // Create chart
+                const ctx = document.getElementById('confidence-chart').getContext('2d');
+                
+                // Destroy previous chart if exists
+                if (confidenceChart) {
+                    confidenceChart.destroy();
+                }
+                
+                const probabilities = data.probabilities;
+                const labels = Object.keys(probabilities);
+                const values = Object.values(probabilities).map(p => Math.round(p * 100));
+                
+                // Bar colors
+                const colors = {
+                    'Work': 'rgba(13, 110, 253, 0.7)',
+                    'Personal': 'rgba(25, 135, 84, 0.7)',
+                    'Spam': 'rgba(255, 193, 7, 0.7)'
+                };
+                
+                const backgroundColors = labels.map(label => colors[label] || 'rgba(108, 117, 125, 0.7)');
+                
+                confidenceChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Confidence (%)',
+                            data: values,
+                            backgroundColor: backgroundColors,
+                            borderColor: backgroundColors.map(color => color.replace('0.7', '1')),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+                
+                // Show results
+                resultCard.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html> 
