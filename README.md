@@ -20,7 +20,7 @@ A full-stack web application that uses a neural network to classify emails into 
 
 1. Clone this repository:
 ```
-git clone https://github.com/chiru5190/Email-Classifier.git
+git clone https://github.com/YeswanthKumarDadibathini/Email-classifier.git
 cd email-classifier
 ```
 
@@ -82,5 +82,5 @@ MIT
 
 ## Author
 
+YeswanthKumarDadibathini
 
-chiru5190
